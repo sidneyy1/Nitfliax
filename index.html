@@ -209,6 +209,10 @@ img{display:block}
 .genre-select:focus{border-color:#fff}
 .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 @media(min-width:1400px){.grid-cards{grid-template-columns:repeat(6,1fr)}}
+/* Hide cards with no poster (filtered by default in search) */
+.title-card.hidden-noimg{display:none}
+.noimg-toggle{display:flex;align-items:center;gap:8px;margin:0 0 16px;color:var(--nf-muted);font-size:14px;cursor:pointer;user-select:none}
+.noimg-toggle input{width:16px;height:16px;accent-color:var(--nf-red);cursor:pointer}
 
 /* ============ PINOY PAGE ============ */
 .pinoy-page{display:none;padding:90px 4% 50px;min-height:100vh;background:var(--nf-bg)}
@@ -671,6 +675,10 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input type="text" id="searchInput2" placeholder="Search for a movie, TV show, or person" oninput="handleSearch(event)">
   </div>
+  <label class="noimg-toggle">
+    <input type="checkbox" id="showNoImgToggle" onchange="toggleNoImg(this.checked)">
+    <span>Show titles without posters</span>
+  </label>
   <div class="search-title" id="searchTitle"></div>
   <div class="grid-cards" id="searchGrid"></div>
 </div>
@@ -826,6 +834,21 @@ function markNoImg(img) {
   const card = img.closest('.title-card');
   if (card) card.classList.add('tc-noimg');
   img.style.display = 'none';
+  applyNoImgFilter();   // re-apply visibility now that this card is confirmed imageless
+}
+// Hide cards with no poster by default; toggle reveals them (search grid only).
+let hideNoImg = true;
+function toggleNoImg(checked) {
+  hideNoImg = !checked;
+  applyNoImgFilter();
+}
+function applyNoImgFilter() {
+  const grid = document.getElementById('searchGrid');
+  if (!grid) return;
+  grid.querySelectorAll('.title-card').forEach(c => {
+    const noImg = c.classList.contains('tc-noimg');
+    c.classList.toggle('hidden-noimg', noImg && hideNoImg);
+  });
 }
 const _tmdbCache = {};
 async function fetchTMDBImage(imdbId) {
@@ -1287,6 +1310,7 @@ async function performSearch(query) {
       return;
     }
     document.getElementById('searchGrid').innerHTML = results.map(renderCard).join('');
+    setTimeout(applyNoImgFilter, 1200);   // catch cards that resolve their image shortly after render
   } catch (e) {
     console.error('Search failed:', e);
     document.getElementById('searchGrid').innerHTML = '<p style="color:var(--nf-muted)">Search failed. Please try again.</p>';

@@ -4,7 +4,7 @@
 <script>
 (function(){
   try{
-    var t = localStorage.getItem('jabuhok-theme') || 'default';
+    var t = localStorage.getItem('nitfliax-theme') || 'default';
     document.documentElement.setAttribute('data-theme', t);
   }catch(e){
     document.documentElement.setAttribute('data-theme','default');
@@ -13,7 +13,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jabuhok - Watch Movies & TV Shows Free</title>
+<title>NitFliax - Watch Movies & TV Shows Free</title>
 <link rel="preconnect" href="https://images.metahub.space">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -549,7 +549,7 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
 
 <!-- Navbar -->
 <nav class="navbar" id="navbar">
-  <a class="logo" href="#home" onclick="goHome()">Jabuhok</a>
+  <a class="logo" href="#home" onclick="goHome()">NitFliax</a>
   <div class="nav-links">
     <a class="active" data-nav="home" href="#home">Home</a>
     <a data-nav="movie" href="#movie">Movies</a>
@@ -691,7 +691,7 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
 </div>
 
 <footer>
-  <p>Jabuhok &middot; Powered by vidsrc.to &amp; Cinemeta &middot; For educational purposes only</p>
+  <p>NitFliax &middot; Powered by vidsrc.to &amp; Cinemeta &middot; For educational purposes only</p>
 </footer>
 
 <script>
@@ -1215,7 +1215,7 @@ function changeProvider() {
 (function() {
   const originalOpen = window.open;
   window.open = function(url) {
-    console.log('[Jabuhok] Blocked top-level popup:', url);
+    console.log('[NitFliax] Blocked top-level popup:', url);
     return null;
   };
 })();
@@ -1359,13 +1359,13 @@ window.addEventListener('hashchange', route);
 // ============= THEME =============
 function setTheme(name) {
   document.documentElement.setAttribute('data-theme', name);
-  try { localStorage.setItem('jabuhok-theme', name); } catch (e) {}
+  try { localStorage.setItem('nitfliax-theme', name); } catch (e) {}
   var sel = document.getElementById('themeSelect');
   if (sel) sel.value = name;
 }
 
 // ============= INIT =============
-setTheme((function(){ try { return localStorage.getItem('jabuhok-theme') || 'default'; } catch(e){ return 'default'; } })());
+setTheme((function(){ try { return localStorage.getItem('nitfliax-theme') || 'default'; } catch(e){ return 'default'; } })());
 route();
 </script>
 </body>

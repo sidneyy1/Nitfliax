@@ -331,6 +331,8 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
 @media(max-width:768px){
   .nav-links{display:none}
   .hamburger{display:flex}
+  .navbar{gap:12px}
+  .nav-right{gap:10px}
   .billboard{height:78vh;min-height:480px}
   .billboard-content{max-width:90%}
   .row--first{margin-top:0}
@@ -338,7 +340,12 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
   .detail-hero-content{padding-bottom:9%}
   .slider-arrow{display:none}
   .row-cards .title-card{width:42vw}
-  .search-box.open input{width:min(200px,55vw)}
+  /* open search bar grows to fill the navbar instead of overflowing the theme switch */
+  .search-box.open{flex:1 1 auto;min-width:0;max-width:none}
+  .search-box.open input{flex:1;min-width:0;width:auto}
+  /* when the search bar is open, drop the theme switch so the field fits inside the navbar */
+  .navbar.search-open .theme-select{display:none}
+  .navbar.search-open .hamburger{display:none}
 }
 
 /* ===================================================================
@@ -392,7 +399,7 @@ footer{padding:40px 4%;text-align:center;color:var(--nf-muted-2);font-size:13px;
 }
 [data-theme="coquette"] .navbar.scrolled{background:#fff3f6}
 [data-theme="coquette"] .logo{
-  position:absolute;left:50%;transform:translateX(-50%);
+  position:static;margin-right:10px;
   color:var(--nf-red);font-family:var(--font-display);
   font-size:30px;font-weight:400;letter-spacing:0;text-transform:none;
   text-shadow:1px 1px 0 #fff, 2px 2px 0 var(--coq-accent);
@@ -723,9 +730,12 @@ window.addEventListener('scroll', () => {
 
 function toggleSearch() {
   const box = document.getElementById('searchBox');
-  box.classList.toggle('open');
-  if (box.classList.contains('open')) {
+  const open = box.classList.toggle('open');
+  document.getElementById('navbar').classList.toggle('search-open', open);
+  if (open) {
     document.getElementById('searchInput').focus();
+  } else {
+    closeMenu();
   }
 }
 

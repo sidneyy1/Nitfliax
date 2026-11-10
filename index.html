@@ -977,10 +977,10 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
 [data-theme="coquette"] .navbar.scrolled,[data-theme="coquette"] .navbar.menu-open{background:rgba(255,245,248,.98)}
 [data-theme="coquette"] .logo{
   position:relative;color:var(--nf-red);font-size:32px;font-weight:400;letter-spacing:0;text-transform:none;
-  text-shadow:1px 1px 0 #fff,2px 2px 0 var(--coq-accent);padding-right:30px;
+  text-shadow:1px 1px 0 #fff,2px 2px 0 var(--coq-accent);margin-right:26px;
 }
 [data-theme="coquette"] .logo::after{
-  content:'';position:absolute;right:0;top:-6px;width:28px;height:20px;background:var(--coq-bow) center/contain no-repeat;
+  content:'';position:absolute;right:-28px;top:-6px;width:28px;height:20px;background:var(--coq-bow) center/contain no-repeat;
   transform:rotate(14deg);transition:transform var(--t) var(--ease);
 }
 [data-theme="coquette"] .logo:hover::after{transform:rotate(-6deg) scale(1.1)}
@@ -1182,6 +1182,8 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
 [data-theme="coquette"] ::-webkit-scrollbar-track{background:#f8d7e2}
 [data-theme="coquette"] .skip-link{background:var(--nf-red);color:#fff}
 @media(max-width:800px){
+  [data-theme="coquette"] .navbar .logo{position:absolute;left:50%;transform:translateX(-50%);margin-right:0}
+  [data-theme="coquette"] .navbar .logo:hover{transform:translateX(-50%)}
   [data-theme="coquette"] .billboard-vignette{
     background:linear-gradient(180deg,rgba(253,228,236,.1) 0%,rgba(253,228,236,.72) 48%,rgba(253,228,236,.94) 74%,#fde4ec 100%);
   }
@@ -1189,8 +1191,8 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
   [data-theme="coquette"] .maturity,[data-theme="coquette"] .hd-badge{background:rgba(255,245,248,.85)}
 }
 @media(max-width:560px){
-  [data-theme="coquette"] .logo{font-size:24px;padding-right:24px}
-  [data-theme="coquette"] .logo::after{width:22px;height:16px;top:-4px}
+  [data-theme="coquette"] .logo{font-size:24px}
+  [data-theme="coquette"] .logo::after{right:-22px;width:22px;height:16px;top:-4px}
   [data-theme="coquette"] .coquette-announce{font-size:10px;letter-spacing:1px}
 }
 </style>

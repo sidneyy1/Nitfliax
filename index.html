@@ -686,6 +686,14 @@ img{display:block;max-width:100%}
 .source-ext{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#fff;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:6px 12px;text-decoration:none;white-space:nowrap}
 .source-ext:hover{background:rgba(255,255,255,.18)}
 .source-ext[hidden]{display:none}
+/* Cancellable EmbedWave server-failover badge */
+.ew-chain{position:absolute;left:14px;top:14px;z-index:4;display:flex;align-items:center;gap:8px;max-width:calc(100% - 28px);padding:7px 9px 7px 12px;border-radius:999px;background:rgba(10,10,14,.84);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35);color:#fff;font-size:12px;font-weight:600;backdrop-filter:blur(8px)}
+.ew-chain[hidden]{display:none}
+.ew-chain-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ew-chain button{flex:0 0 auto;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;border-radius:999px;padding:3px 9px;font:inherit;font-size:11px;cursor:pointer;transition:background-color var(--t-fast)}
+.ew-chain button:hover{background:rgba(255,255,255,.22)}
+.ew-chain .ew-keep{background:rgba(229,9,20,.22);border-color:rgba(229,9,20,.6)}
+.ew-chain .ew-keep:hover{background:rgba(229,9,20,.38)}
 .player-hotzone{display:none;position:absolute;left:0;right:0;top:0;height:36px;z-index:9}
 .player-overlay{
   position:relative;flex:0 0 auto;z-index:10;
@@ -869,6 +877,8 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
   .player-tools .source-ext{display:none}
   .player-tools #bratzPartBar{max-width:82px;padding:2px 4px}
   .player-tools #bratzPartBar select{font-size:11px;max-width:70px}
+  .ew-chain{left:8px;top:8px;gap:5px;padding:5px 6px 5px 9px;font-size:11px;max-width:calc(100% - 16px)}
+  .ew-chain button{font-size:10px;padding:3px 7px}
   .pl-btn{width:32px;height:32px;flex:0 0 auto}
   .pl-btn svg{width:18px;height:18px}
   .footer-cols{grid-template-columns:1fr 1fr}
@@ -1484,6 +1494,11 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
     <div class="spinner" aria-hidden="true"></div>
     <iframe id="videoPlayer" title="Video player" src="about:blank" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer"></iframe>
     <video id="directPlayer" controls autoplay playsinline preload="metadata"></video>
+    <div class="ew-chain" id="ewChain" role="status" aria-live="polite" hidden>
+      <span class="ew-chain-text" id="ewChainText">Trying Multi HD…</span>
+      <button type="button" class="ew-keep" id="ewKeepBtn" title="This server is playing - stop auto-switching">Keep</button>
+      <button type="button" id="ewNextBtn" title="Skip this server and try the next one now">Next</button>
+    </div>
     <div class="source-fallback" id="sourceFallback" hidden>
       <div class="sf-icon" aria-hidden="true">&#9654;</div>
       <h3 id="sfTitle">This upload can't be embedded</h3>
@@ -1553,7 +1568,7 @@ body.player-mode .navbar,body.player-mode .site-footer,body.player-mode .coquett
       </div>
     </div>
     <div class="footer-copy">
-      <p>NitFliax &middot; Powered by vidsrc.to &amp; Cinemeta &middot; For educational purposes only</p>
+      <p>NitFliax &middot; Powered by EmbedWave &amp; Cinemeta &middot; For educational purposes only</p>
       <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
     </div>
   </div>
@@ -3528,6 +3543,16 @@ async function loadSimilarTitles(meta) {
 }
 
 // ============= PROVIDER CONFIG =============
+const DEFAULT_PROVIDER = 'embedwave';
+const PROVIDER_STORAGE_KEY = 'nitfliax_provider_v2';
+const LEGACY_PROVIDER_KEY = 'streamhub_provider';
+const EMBEDWAVE_SERVERS = [
+  { id: 'nxsha', name: 'Multi HD' },
+  { id: 'cinesrc', name: 'Cinesrc' },
+  { id: 'videasy', name: '4K' }
+];
+const EMBEDWAVE_FALLBACK_MS = 12000;
+
 const PROVIDERS = {
   vidsrc: {
     name: 'vidsrc.to',
@@ -3539,12 +3564,17 @@ const PROVIDERS = {
   },
   embedwave: {
     name: 'EmbedWave',
-    buildUrl(item, type, season, episode) {
+    buildUrl(item, type, season, episode, server) {
       const tmdbId = item.moviedb_id || (item.meta && item.meta.moviedb_id) || (_tmdbCache[item.id] && _tmdbCache[item.id].tmdbId);
       if (!tmdbId) return null;
-      if (type === 'movie') return `https://embedwave.cc/embed/movie/${tmdbId}`;
       const s = season || 1, e = episode || 1;
-      return `https://embedwave.cc/embed/tv/${tmdbId}/${s}/${e}`;
+      const base = type === 'movie'
+        ? `https://embedwave.cc/embed/movie/${tmdbId}`
+        : `https://embedwave.cc/embed/tv/${tmdbId}/${s}/${e}`;
+      const params = new URLSearchParams();
+      if (server) params.set('server', server);
+      params.set('autoplay', '1');
+      return `${base}${base.includes('?') ? '&' : '?'}${params.toString()}`;
     }
   },
   '2embed': {
@@ -3563,23 +3593,48 @@ const PROVIDERS = {
   }
 };
 
-let currentProvider = localStorage.getItem('streamhub_provider') || 'vidsrc';
-if (!PROVIDERS[currentProvider] || currentProvider === 'official') currentProvider = 'vidsrc';
+function readStoredProvider() {
+  let modern = null, legacy = null;
+  try { modern = localStorage.getItem(PROVIDER_STORAGE_KEY); } catch (e) {}
+  try { legacy = localStorage.getItem(LEGACY_PROVIDER_KEY); } catch (e) {}
+  // Old builds defaulted to vidsrc, so a legacy vidsrc value is treated as
+  // "no explicit choice" during the one-time move to EmbedWave as default.
+  const candidate = modern || (legacy && legacy !== 'vidsrc' ? legacy : null);
+  return (candidate && PROVIDERS[candidate] && candidate !== 'official') ? candidate : DEFAULT_PROVIDER;
+}
+let currentProvider = readStoredProvider();
+try {
+  localStorage.setItem(PROVIDER_STORAGE_KEY, currentProvider);
+  localStorage.removeItem(LEGACY_PROVIDER_KEY);
+} catch (e) {}
 
 let activeBratzSource = null;   // curated entry currently loaded in the player
 let bratzOptOut = null;         // imdbId the user explicitly switched away from
 let autoProviderRestore = null; // provider to restore after auto-switching
+let fallbackRestore = null;     // { imdbId, provider } one-title source detour
+
+// EmbedWave server-failover state. Cross-origin iframe playback cannot be
+// inspected directly, so the countdown is cancellable by real interaction.
+let activeEmbedwaveServer = null;
+let embedwaveState = null;
+let embedwaveTimer = null;
+let embedwaveTickTimer = null;
+let embedwaveToken = 0;
 
 function getProvider() {
-  return PROVIDERS[currentProvider] || PROVIDERS.vidsrc;
+  return PROVIDERS[currentProvider] || PROVIDERS[DEFAULT_PROVIDER];
 }
 
 function setProvider(providerKey) {
   currentProvider = providerKey;
+  if (providerKey !== 'embedwave') activeEmbedwaveServer = null;
   try {
     // 'official' is a per-title auto-selection, never a global default.
-    if (providerKey === 'official') localStorage.removeItem('streamhub_provider');
-    else localStorage.setItem('streamhub_provider', providerKey);
+    // Keep the last manual provider stored for the next visit.
+    if (providerKey !== 'official') {
+      localStorage.setItem(PROVIDER_STORAGE_KEY, providerKey);
+      localStorage.removeItem(LEGACY_PROVIDER_KEY);
+    }
   } catch (e) {}
   const select = document.getElementById('providerSelect');
   if (select) select.value = providerKey;
@@ -3592,7 +3647,9 @@ function updateProviderHint() {
   if (activeBratzSource && currentProvider === 'official') {
     hint.textContent = activeBratzSource.label || 'Verified playable source';
   } else if (currentProvider === 'embedwave') {
-    hint.textContent = 'Ad-free multi-server';
+    hint.textContent = activeEmbedwaveServer
+      ? `Auto servers · ${activeEmbedwaveServer}`
+      : 'Auto: Multi HD → Cinesrc → 4K';
   } else if (currentProvider === '2embed') {
     hint.textContent = 'Pinoy-friendly server';
   } else {
@@ -3600,9 +3657,127 @@ function updateProviderHint() {
   }
 }
 
+function embedwaveSource(chain, index) {
+  const server = EMBEDWAVE_SERVERS[index];
+  if (!server) return null;
+  const url = PROVIDERS.embedwave.buildUrl(chain.item, chain.type, chain.season, chain.episode, server.id);
+  if (!url) return null;
+  return { kind: 'embed', url, embedwave: { chain, index } };
+}
+
+function stopEmbedwaveChain() {
+  embedwaveToken++;
+  clearTimeout(embedwaveTimer);
+  clearInterval(embedwaveTickTimer);
+  embedwaveTimer = null;
+  embedwaveTickTimer = null;
+  embedwaveState = null;
+  const badge = document.getElementById('ewChain');
+  if (badge) badge.hidden = true;
+}
+
+function keepEmbedwaveServer() {
+  if (!embedwaveState) return;
+  const server = EMBEDWAVE_SERVERS[embedwaveState.index];
+  activeEmbedwaveServer = server ? server.name : null;
+  stopEmbedwaveChain();
+  updateProviderHint();
+}
+
+function advanceEmbedwaveServer() {
+  if (!embedwaveState || embedwaveState.token !== embedwaveToken) return;
+  const { chain, index } = embedwaveState;
+  // Consume the countdown now so a double-trigger (timer + click) cannot skip a server.
+  stopEmbedwaveChain();
+  const nextIndex = index + 1;
+  if (nextIndex >= EMBEDWAVE_SERVERS.length) {
+    showEmbedwaveExhausted();
+    return;
+  }
+  const next = embedwaveSource(chain, nextIndex);
+  if (next) setPlayerSource(next);
+  else showEmbedwaveExhausted();
+}
+
+function scheduleEmbedwaveFallback(chain, index) {
+  stopEmbedwaveChain();
+  const server = EMBEDWAVE_SERVERS[index];
+  if (!server) return;
+  const token = ++embedwaveToken;
+  activeEmbedwaveServer = server.name;
+  embedwaveState = { chain, index, token, server: server.name, startedAt: performance.now() };
+  const badge = document.getElementById('ewChain');
+  const text = document.getElementById('ewChainText');
+  if (badge) badge.hidden = false;
+  const endAt = performance.now() + EMBEDWAVE_FALLBACK_MS;
+  const render = () => {
+    if (!embedwaveState || embedwaveState.token !== token) return;
+    const left = Math.max(0, Math.ceil((endAt - performance.now()) / 1000));
+    if (text) text.textContent = `Trying ${server.name} · ${left}s`;
+  };
+  render();
+  embedwaveTickTimer = setInterval(render, 250);
+  embedwaveTimer = setTimeout(() => {
+    if (!embedwaveState || embedwaveState.token !== token) return;
+    advanceEmbedwaveServer();
+  }, EMBEDWAVE_FALLBACK_MS);
+  updateProviderHint();
+}
+
+function showEmbedwaveExhausted() {
+  stopEmbedwaveChain();
+  activeEmbedwaveServer = null;
+  updateProviderHint();
+  const wrap = document.getElementById('playerFrameWrap');
+  const iframe = document.getElementById('videoPlayer');
+  const fb = document.getElementById('sourceFallback');
+  if (iframe) iframe.src = 'about:blank';
+  if (wrap) wrap.classList.add('fallback-mode');
+  if (fb) {
+    fb.hidden = false;
+    const title = document.getElementById('sfTitle');
+    const text = document.getElementById('sfText');
+    const link = document.getElementById('sfLink');
+    if (title) title.textContent = 'No EmbedWave server has this title';
+    if (text) text.textContent = 'Tried Multi HD, Cinesrc and 4K. Try another source, or choose a different title.';
+    if (link) link.hidden = true;
+  }
+}
+
+// A click/focus into the cross-origin player is the strongest playback signal
+// available to the parent page. postMessage success events are honored too.
+(function bindEmbedwaveControls() {
+  const keep = document.getElementById('ewKeepBtn');
+  const next = document.getElementById('ewNextBtn');
+  if (keep) keep.addEventListener('click', keepEmbedwaveServer);
+  if (next) next.addEventListener('click', advanceEmbedwaveServer);
+  window.addEventListener('blur', () => {
+    if (!embedwaveState) return;
+    const active = document.activeElement;
+    // Clicking into the cross-origin player blurs the parent window and leaves
+    // the iframe focused. Ignore tab switches, which are not a playback signal.
+    if (active && active.tagName === 'IFRAME') keepEmbedwaveServer();
+  });
+  window.addEventListener('message', e => {
+    if (!embedwaveState) return;
+    const origin = e.origin || '';
+    if (!/embedwave\.cc|nxsha\.app|cinesrc\.st|videasy/i.test(origin)) return;
+    let data = '';
+    try { data = typeof e.data === 'string' ? e.data : JSON.stringify(e.data || ''); } catch (err) { data = ''; }
+    if (/\b(play|playing|ready|started|timeupdate|duration)\b/i.test(data)) keepEmbedwaveServer();
+  });
+  document.addEventListener('fullscreenchange', () => {
+    if (embedwaveState && document.fullscreenElement) keepEmbedwaveServer();
+  });
+  const select = document.getElementById('providerSelect');
+  if (select) select.value = currentProvider;
+  updateProviderHint();
+})();
+
 function changeProvider() {
   const select = document.getElementById('providerSelect');
   if (!select) return;
+  fallbackRestore = null; // an explicit dropdown choice wins over a detour
   if (BRATZ_BY_ID[currentImdbId]) {
     bratzOptOut = select.value === 'official' ? null : currentImdbId;
   }
@@ -3612,10 +3787,24 @@ function changeProvider() {
   }
 }
 
-// Called from the "Try another source" button on an embed-restricted upload.
+// Called from "Try another source" (restricted upload, or all EmbedWave
+// servers exhausted). This is a per-title detour, so it must NOT overwrite the
+// saved global default — EmbedWave stays the default for the next visit.
 function useFallbackProvider() {
   bratzOptOut = currentImdbId;
-  setProvider('vidsrc');
+  const previous = currentProvider === 'official'
+    ? (autoProviderRestore || DEFAULT_PROVIDER)
+    : currentProvider;
+  // Remember the real default once per title, even if the button is pressed
+  // several times (vidsrc -> 2Embed -> vidsrc).
+  if (!fallbackRestore || fallbackRestore.imdbId !== currentImdbId) {
+    fallbackRestore = { imdbId: currentImdbId, provider: previous };
+  }
+  currentProvider = currentProvider === 'vidsrc' ? '2embed' : 'vidsrc';
+  activeEmbedwaveServer = null;
+  const select = document.getElementById('providerSelect');
+  if (select) select.value = currentProvider;
+  updateProviderHint();
   if (currentImdbId && currentType) playMedia(currentImdbId, currentType, currentSeason, currentEpisodeNum);
 }
 
@@ -3656,6 +3845,10 @@ function setPlayerSource(src) {
   const fb = document.getElementById('sourceFallback');
   if (!wrap || !iframe || !video || !fb) return;
 
+  // Cancel any pending server-failover countdown before swapping sources.
+  stopEmbedwaveChain();
+  if (!src || !src.embedwave) activeEmbedwaveServer = null;
+
   // Always tear down the previous source so closing/switching stops playback.
   try { video.pause(); } catch (e) {}
   video.removeAttribute('src');
@@ -3667,6 +3860,11 @@ function setPlayerSource(src) {
   if (!src || src.kind === 'embed') {
     iframe.referrerPolicy = src && src.needsReferrer ? 'strict-origin-when-cross-origin' : 'no-referrer';
     iframe.src = (src && src.url) || 'about:blank';
+    // EmbedWave shells are cross-origin, so the parent cannot see whether the
+    // upstream <video> loaded. Start the visible, cancellable failover timer.
+    if (src && src.embedwave && src.url) {
+      scheduleEmbedwaveFallback(src.embedwave.chain, src.embedwave.index);
+    }
     return;
   }
   if (src.kind === 'mp4') {
@@ -3784,6 +3982,10 @@ function togglePlayerOverlayMode(force) {
 function stopPlayerDom() {
   clearTimeout(playerIdleTimer);
   clearTimeout(playerTipTimer);
+  // Leaving the player must cancel any pending Multi HD -> Cinesrc -> 4K hop,
+  // otherwise a queued timer could reload an iframe on a browse page.
+  stopEmbedwaveChain();
+  activeEmbedwaveServer = null;
   const pp = document.getElementById('playerPage');
   if (pp) {
     pp.style.display = 'none';
@@ -3871,6 +4073,15 @@ async function playMedia(imdbId, type, season = null, episode = null) {
   currentSeason = season || 1;
   currentEpisodeNum = episode || 1;
 
+  // A "Try another source" detour belongs to one title only. As soon as a
+  // different title opens, go back to the user's real default (EmbedWave).
+  if (fallbackRestore && fallbackRestore.imdbId !== imdbId) {
+    currentProvider = fallbackRestore.provider;
+    fallbackRestore = null;
+    const sel = document.getElementById('providerSelect');
+    if (sel) sel.value = currentProvider;
+  }
+
   if (!currentMedia || currentMedia.id !== imdbId) {
     try {
       currentMedia = await getMeta(type, imdbId);
@@ -3884,8 +4095,9 @@ async function playMedia(imdbId, type, season = null, episode = null) {
     currentEpisodes = currentMedia.videos;
   }
 
-  // Ensure TMDB ID is cached if user picked EmbedWave
-  if (currentProvider === 'embedwave' && currentMedia && !currentMedia.moviedb_id) {
+  // EmbedWave addresses titles by TMDB id, not IMDb id. fetchTMDBData() is
+  // cached, so this is a no-op when artwork lookup already resolved it.
+  if (currentProvider === 'embedwave') {
     await fetchTMDBData(imdbId);
   }
 
@@ -3905,13 +4117,26 @@ async function playMedia(imdbId, type, season = null, episode = null) {
       currentProvider = autoProviderRestore;
       autoProviderRestore = null;
     }
-    const provider = getProvider();
-    let embedUrl = provider.buildUrl(currentMedia || { id: imdbId }, type, currentSeason, currentEpisodeNum);
-    if (!embedUrl) {
-      currentProvider = 'vidsrc';
-      embedUrl = PROVIDERS.vidsrc.buildUrl(currentMedia || { id: imdbId }, type, currentSeason, currentEpisodeNum);
+    const media = currentMedia || { id: imdbId };
+    if (currentProvider === 'embedwave') {
+      // Start every EmbedWave title on Multi HD. setPlayerSource() arms the
+      // countdown; if it expires (or the user hits Next) we hop to Cinesrc,
+      // then 4K, using the same title/episode chain.
+      const chain = { item: media, type, season: currentSeason, episode: currentEpisodeNum };
+      src = embedwaveSource(chain, 0);
+      if (!src) {
+        // No TMDB match for this id: use vidsrc for this title only.
+        currentProvider = 'vidsrc';
+        src = { kind: 'embed', url: PROVIDERS.vidsrc.buildUrl(media, type, currentSeason, currentEpisodeNum) };
+      }
+    } else {
+      let embedUrl = getProvider().buildUrl(media, type, currentSeason, currentEpisodeNum);
+      if (!embedUrl) {
+        currentProvider = 'vidsrc';
+        embedUrl = PROVIDERS.vidsrc.buildUrl(media, type, currentSeason, currentEpisodeNum);
+      }
+      src = { kind: 'embed', url: embedUrl };
     }
-    src = { kind: 'embed', url: embedUrl };
   }
 
   setPlayerSource(src);
